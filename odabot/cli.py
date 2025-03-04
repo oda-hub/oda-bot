@@ -407,7 +407,7 @@ def update_workflow(last_commit,
                         "There is a mismatch between parameter types and annotations. The exception is:\n"
                         f"{repr(e)}"
                         "\n\nSincerely, ODA Bot"
-                        ))
+                        ), bcc=to_admin)
             if to_admin:
                 send_email(to_admin, 
                         f"[ODA-Workflow-Bot] type checking error in {project['name']}!", 

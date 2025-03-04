@@ -36,6 +36,7 @@ try:
     import rdflib
     from nb2workflow.deploy import ContainerBuildException, NBRepo
     from nb2workflow import version as nb2wver
+    from typeguard import TypeCheckError
     #from nb2workflow.validate import validate, patch_add_tests, patch_normalized_uris
     from mmoda_tab_generator.tab_generator import MMODATabGenerator
     from .markdown_helper import convert_help
@@ -224,11 +225,11 @@ def update_workflow(last_commit,
     logger.info("validation_results: %s", validation_results)
     if len(validation_results) > 0:
         
-        to = last_commit['committer_email'] if email_notify_user else []
+        to_user = last_commit['committer_email'] if email_notify_user else []
         bcc = extra_emails if email_notify_admin else []
 
-        if to or bcc:
-            send_email(to, 
+        if to_user or bcc:
+            send_email(to_user, 
                 f"[ODA-Workflow-Bot] did not manage to deploy {project['name']}", 
                 ("Dear MMODA Workflow Developer\n\n"
                 f"Good news! ODA bot thinks there is some potential for improvement of your project {project['name']}: " 
@@ -378,17 +379,42 @@ def update_workflow(last_commit,
                     with open(attachments[-1], 'wt') as fd:
                         fd.write(dockerfile)
 
-                to = last_commit['committer_email'] if email_notify_user else []
-                bcc = extra_emails if email_notify_admin else []                 
-                if to or bcc:
-                    send_email(to, 
+                to_user = last_commit['committer_email'] if email_notify_user else []
+                bcc = extra_emails if email_notify_admin else [] 
+                if to_user or bcc:
+                    send_email(to_user, 
                             f"[ODA-Workflow-Bot] unfortunately did NOT manage to deploy {project['name']}!", 
                             ("Dear MMODA Workflow Developer\n\n"
                             "ODA-Workflow-Bot just tried to build the container for your workflow following some change, but did not manage!\n\n"
                             "Please check attached files for more info.\n"
                             "\n\nSincerely, ODA Bot"
                             ), attachments, bcc=bcc)
+        
+        except TypeCheckError as e:
+            deployed_workflows[project['http_url_to_repo']] = {'last_commit_created_at': last_commit_created_at, 
+                                                               'last_deployment_status': 'failed',
+                                                               'stage_failed': 'pre-build'} 
+                                                                # currently it's pre-build stage but only because of debug logging
+                                                                
+            logger.error('Build error in %s! %s', project['name'], repr(e))
+            to_user = last_commit['committer_email'] if email_notify_user else []
+            to_admin = extra_emails if email_notify_admin else [] 
+            if to_user:
+                send_email(to_user, 
+                        f"[ODA-Workflow-Bot] unfortunately did NOT manage to deploy {project['name']}!", 
+                        ("Dear MMODA Workflow Developer\n\n"
+                        "ODA-Workflow-Bot just tried to build the container for your workflow following some change, but did not manage!\n\n"
+                        "There is a mismatch between parameter types and annotations. The exception is:\n"
+                        f"{repr(e)}"
+                        "\n\nSincerely, ODA Bot"
+                        ))
+            if to_admin:
+                send_email(to_admin, 
+                        f"[ODA-Workflow-Bot] type checking error in {project['name']}!", 
+                        traceback.format_exc()
+                        )
 
+                                                                
         except Exception as e:
             deployed_workflows[project['http_url_to_repo']] = {'last_commit_created_at': last_commit_created_at, 
                                                                'last_deployment_status': 'failed',
@@ -396,18 +422,18 @@ def update_workflow(last_commit,
 
             logger.exception('exception deploying %s! %s', project['name'], repr(e))
 
-            to = last_commit['committer_email'] if email_notify_user else []
-            if to:
+            to_user = last_commit['committer_email'] if email_notify_user else []
+            if to_user:
                 send_email(
-                    to, 
+                    to_user, 
                     f"[ODA-Workflow-Bot] unfortunately did NOT manage to deploy {project['name']}!", 
                     ("Dear MMODA Workflow Developer\n\n"
                     "ODA-Workflow-Bot just tried to deploy your workflow following some change, but did not manage due to an internal error.\n"
                     "We are working on fixing the issue.\n"
                     "\n\nSincerely, ODA Bot"
                     ))    
-            to = extra_emails if email_notify_admin else []                 
-            if to:
+            to_user = extra_emails if email_notify_admin else []                 
+            if to_user:
                 send_email(
                     extra_emails,
                     f"[ODA-Workflow-Bot] internal error while deploying {project['name']}",

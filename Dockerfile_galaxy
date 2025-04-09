@@ -11,4 +11,7 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
 RUN chmod +x /tini
 ENTRYPOINT ["/tini", "--"]
 
+RUN useradd jovyan -m --id 1000
+USER 1000
+
 CMD ["odabot", "--settings", "/settings.toml", "make-galaxy-tools", "--loop", "10"]

@@ -25,12 +25,17 @@ def send_email(
 
     try:
         if method == 'smtp':
-            for name in ('EMAIL_SMTP_SERVER', 
-                         'EMAIL_SMTP_USER',
-                         'EMAIL_SMTP_PASSWORD',
-                         ):
-                if os.getenv(name) is None:
-                    raise MissingEnvironmentVariable(f"'{name}' environment variable is not set")
+            if not os.getenv('EMAIL_SMTP_SERVER'):
+                raise MissingEnvironmentVariable("'EMAIL_SMTP_SERVER' environment variable is not set")
+
+            # for some relays user and password can be empty
+            smtp_user = os.getenv('EMAIL_SMTP_USER')
+            smtp_password = os.getenv('EMAIL_SMTP_PASSWORD')
+
+            def login_if_configured(smtp):
+                # only log in when credentials are set
+                if smtp_user and smtp_password:
+                    smtp.login(smtp_user, smtp_password)
 
             msg = MIMEMultipart()
             part1 = MIMEText(text, "plain")
@@ -45,14 +50,16 @@ def send_email(
                     msg.attach(part)
 
             msg['Subject'] = subject
-            email_from = os.getenv('EMAIL_FROM', os.getenv('EMAIL_SMTP_USER'))
-            msg['From'] = email_from  # type: ignore
+            email_from = os.getenv('EMAIL_FROM') or smtp_user
+            if not email_from:
+                raise MissingEnvironmentVariable("'EMAIL_FROM' (or 'EMAIL_SMTP_USER') environment variable is not set")
+            msg['From'] = email_from
 
             if to: msg['To'] = ', '.join(to) if isinstance(to, list) else to
             if cc: msg['Cc'] = ', '.join(cc) if isinstance(cc, list) else cc
             if bcc: msg['Bcc'] = ', '.join(bcc) if isinstance(bcc, list) else bcc
 
-            smtp_encryption = os.getenv('EMAIL_SMTP_ENCRYPTION')
+            smtp_encryption = (os.getenv('EMAIL_SMTP_ENCRYPTION') or '').upper() or None
             port_defined = os.getenv('EMAIL_SMTP_PORT')
             if smtp_encryption is None:
                 if port_defined == '465': 
@@ -62,20 +69,23 @@ def send_email(
 
             if smtp_encryption == 'SSL':
                 with smtplib.SMTP_SSL(os.environ['EMAIL_SMTP_SERVER'],
-                                      port=int(os.getenv('EMAIL_SMTP_PORT', 465))) as smtp:
-                    smtp.login(os.environ['EMAIL_SMTP_USER'], os.environ['EMAIL_SMTP_PASSWORD'])
+                                      port=int(os.getenv('EMAIL_SMTP_PORT', 465)),
+                                      timeout=30) as smtp:
+                    login_if_configured(smtp)
                     smtp.send_message(msg)
             elif smtp_encryption == 'TLS':
                 with smtplib.SMTP(os.environ['EMAIL_SMTP_SERVER'],
-                                  port=int(os.getenv('EMAIL_SMTP_PORT', 587))) as smtp:
+                                  port=int(os.getenv('EMAIL_SMTP_PORT', 587)),
+                                  timeout=30) as smtp:
                     smtp.starttls()
-                    smtp.login(os.environ['EMAIL_SMTP_USER'], os.environ['EMAIL_SMTP_PASSWORD'])
+                    login_if_configured(smtp)
                     smtp.send_message(msg)
             else: 
                 # assume no encryption
                 with smtplib.SMTP(os.environ['EMAIL_SMTP_SERVER'],
-                                  port=int(os.getenv('EMAIL_SMTP_PORT', 25))) as smtp:
-                    smtp.login(os.environ['EMAIL_SMTP_USER'], os.environ['EMAIL_SMTP_PASSWORD'])
+                                  port=int(os.getenv('EMAIL_SMTP_PORT', 25)),
+                                  timeout=30) as smtp:
+                    login_if_configured(smtp)
                     smtp.send_message(msg)
         
         else:

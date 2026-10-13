@@ -25,7 +25,10 @@ extras_req = {
     'galaxy': [
         'nb2workflow[galaxy]',
         'python-frontmatter',
-    ]
+    ],
+    'paper-agent': [
+        'pypdf',
+    ],
     
 }
 

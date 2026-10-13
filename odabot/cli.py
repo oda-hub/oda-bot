@@ -1211,6 +1211,28 @@ def make_galaxy_tools(obj, dry_run, loop, force, pattern):
             break                        
 
 
+@cli.command()
+@click.argument("paper_source")
+@click.option("--output", required=True, type=click.Path(dir_okay=False))
+@click.option("--model", default=lambda: os.getenv("OPENAI_MODEL", "gpt-4o"))
+@click.option(
+    "--api-url",
+    default=lambda: os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+)
+@click.option("--force", is_flag=True)
+def generate_workflow_notebook(paper_source, output, model, api_url, force):
+    """Generate an ODA workflow notebook from a paper PDF or arXiv identifier."""
+    from .paper_agent import PaperToWorkflowAgent
+
+    try:
+        path = PaperToWorkflowAgent(model, api_url).generate(
+            paper_source, output, force=force
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Generated notebook: {path}")
+
+
 # TODO:  test service status and dispatcher status
 # oda-api -u https://dispatcher-staging.obsuks1.unige.ch get -i cta-example
 

@@ -540,7 +540,8 @@ def update_workflows(obj, dry_run, force, loop, pattern):
                 else:
                     project['creative_status'] = default_creative_status
 
-                if re.match(pattern, project['name']) and (set(trigger_topics_dev+trigger_topics_public) & set(project['topics'])):                
+                # dynaconf >= 3.3 returns DataList, need to use list(...) before '+'
+                if re.match(pattern, project['name']) and (set(list(trigger_topics_dev) + list(trigger_topics_public)) & set(project['topics'])):
                     logger.info("%20s  ago %s", project['name'], project['http_url_to_repo'])
                     logger.info("%20s", project['topics'])
                     logger.debug("%s", json.dumps(project))
